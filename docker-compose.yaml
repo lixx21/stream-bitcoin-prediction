@@ -1,0 +1,113 @@
+version: '3'
+
+networks:
+  network:
+volumes:
+  zookeeper-volume:
+  broker-volume:
+  mongodb-data:
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1  # Version of Zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"  # Expose Zookeeper on port 2181
+    networks:
+      - network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1  # Version of Kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper  # Kafka depends on Zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CREATE_TOPICS: "BitcoinData:3:1" # topic_name:partitions:replication_factor
+    ports:
+      - "9092:9092"  # Expose Kafka on port 9092
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  #MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    hostname: mongodb
+    volumes:
+      - mongodb-data:/data/db/
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+    ports:
+      - "27017:27017"
+    networks:
+      - network
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    restart: always
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_SERVER: 'mongodb'
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    ports:
+      - 8081:8081
+    networks:
+      - network
+    depends_on:
+      - mongodb
+
+  app:
+    build: app/.
+    container_name: app
+    networks:
+      - network
+
+  # producer:
+  #   build: app/.
+  #   container_name: kafka-producer
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   networks:
+  #     - network
+  #   volumes:
+  #     - ./app:/app  # Mount the producer directory containing your Python script
+  #   working_dir: /app
+  #   command: ["sh", "-c", "python streamData/kafkaProducer.py"]  #run the producer script
+  
+  # consumer:
+  #   build: app/.
+  #   container_name: kafka-consumer
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   networks:
+  #     - network
+  #   volumes:
+  #     - ./app:/app  # Mount the producer directory containing your Python script
+  #   working_dir: /app
+  #   command: ["sh", "-c", "python streamData/kafkaConsumer.py"]  #run the producer script
+  
+
+
+
