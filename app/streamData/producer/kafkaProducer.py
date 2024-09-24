@@ -6,7 +6,7 @@ from json import dumps
 import json
 
 def readCsvData():
-    dataCSV = "dataset/Bitcoin_USD_(01-05.2024).csv"
+    dataCSV = "./dataset/Bitcoin_USD_(01-05.2024).csv"
     bitcoinData = pd.read_csv(dataCSV) 
     bitcoinData = bitcoinData.dropna()
 
@@ -28,7 +28,7 @@ def sendData():
 
     csvData = readCsvData()
 
-    producer = KafkaProducer(bootstrap_servers= ["localhost:9092"],
+    producer = KafkaProducer(bootstrap_servers= ["broker:9092"],
                             value_serializer = lambda x: dumps(x).encode("utf-8"))
 
     # #sending the data

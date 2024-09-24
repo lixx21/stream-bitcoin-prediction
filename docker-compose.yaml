@@ -2,6 +2,7 @@ version: '3'
 
 networks:
   network:
+    driver: bridge
 volumes:
   zookeeper-volume:
   broker-volume:
@@ -19,29 +20,41 @@ services:
     networks:
       - network
 
-  kafka:
-    image: confluentinc/cp-kafka:7.0.1  # Version of Kafka
-    container_name: kafka
+  broker:
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: broker
+    networks:
+      - network
+    ports:
+    # To learn about configuring Kafka for access across networks see
+    # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "9092:9092"
+      - "29092:29092"
     depends_on:
-      - zookeeper  # Kafka depends on Zookeeper
+      - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_CREATE_TOPICS: "BitcoinData:3:1" # topic_name:partitions:replication_factor
-    ports:
-      - "9092:9092"  # Expose Kafka on port 9092
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
     networks:
       - network
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9092"]
-      interval: 10s
-      retries: 5
-      start_period: 30s
-      timeout: 5s
+    depends_on: 
+      - broker
+    ports:
+      - "7777:8080"
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=broker
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=broker:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
 
   #MongoDB
   mongodb:
@@ -76,11 +89,41 @@ services:
     depends_on:
       - mongodb
 
-  app:
-    build: app/.
-    container_name: app
+
+  consumer:
+    container_name: consumer
+    build:
+      context: ./app/streamData/consumer
+      dockerfile: Dockerfile
+    ports:
+      - 8001:8001
+    # restart: "always"
+    depends_on:
+      - zookeeper
+      - broker
+      - producer
     networks:
       - network
+
+  producer:
+    container_name: producer
+    build:
+      context: ./app/streamData/producer
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    # restart: "always"
+    depends_on:
+      - zookeeper
+      - broker
+    networks:
+      - network
+
+  # app:
+  #   build: app/streamlit/.
+  #   container_name: app
+  #   networks:
+  #     - network
 
   # producer:
   #   build: app/.
