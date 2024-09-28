@@ -135,11 +135,17 @@ services:
     networks:
       - network
 
-  # app:
-  #   build: app/streamlit/.
-  #   container_name: app
-  #   networks:
-  #     - network
+  app:
+    build: app/streamlit/.
+    container_name: app
+    volumes:
+      - ./app/streamlit:/app
+    networks:
+      - network
+    ports:
+      - 3501:8501
+    depends_on:
+      - mongodb
 
   # producer:
   #   build: app/.
