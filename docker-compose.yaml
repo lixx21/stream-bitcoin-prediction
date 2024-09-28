@@ -19,6 +19,11 @@ services:
       - "2181:2181"  # Expose Zookeeper on port 2181
     networks:
       - network
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181", "|", "grep", "imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   broker:
     image: confluentinc/cp-kafka:7.0.1
@@ -31,7 +36,8 @@ services:
       - "9092:9092"
       - "29092:29092"
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -40,6 +46,11 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_CREATE_TOPICS: "BitcoinData:3:1" # topic_name:partitions:replication_factor
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server broker:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   kafka-ui:
     image: provectuslabs/kafka-ui
@@ -99,9 +110,12 @@ services:
       - 8001:8001
     # restart: "always"
     depends_on:
-      - zookeeper
-      - broker
-      - producer
+      zookeeper:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+      producer:
+        condition: service_started
     networks:
       - network
 
@@ -114,8 +128,10 @@ services:
       - 8000:8000
     # restart: "always"
     depends_on:
-      - zookeeper
-      - broker
+      zookeeper:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
     networks:
       - network
 
